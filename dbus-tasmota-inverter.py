@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 
 """
-Changed a lot of a Script originall created by Ralf Zimmermann (mail@ralfzimmermann.de) in 2020.
-The orginal code and its documentation can be found on: https://github.com/RalfZim/venus.dbus-fronius-smartmeter
-Used https://github.com/victronenergy/velib_python/blob/master/dbusdummyservice.py as basis for this service.
-"""
+Created by Waldmensch aka Waldmaus in 2023.
 
-"""
-/data/Pathtothisscript/vedbus.py
-/data/Pathtothisscript/ve_utils.py
-python -m ensurepip --upgrade
-pip install paho-mqtt
+Inspired by:
+ - https://github.com/Marv2190/venus.dbus-MqttToGridMeter (Inspiration)
+ - https://github.com/victronenergy/velib_python/blob/master/dbusdummyservice.py (Template)
+
+
+This code and its documentation can be found on: https://github.com/Waldmensch1/venus.dbus-tasmota-inverter
+Used https://github.com/victronenergy/velib_python/blob/master/dbusdummyservice.py as basis for this service.
+Reading information from Tasmota SENSOR MQTT and puts the info on dbus as pvinverter.
+
 """
 
 
