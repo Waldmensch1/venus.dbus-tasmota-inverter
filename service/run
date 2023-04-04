@@ -1,0 +1,2 @@
+#!/bin/sh
+python /data/dbus-tasmota-inverter/dbus-tasmota-inverter.py
