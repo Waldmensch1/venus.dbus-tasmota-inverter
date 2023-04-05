@@ -16,6 +16,7 @@ Reading information from Tasmota SENSOR MQTT and puts the info on dbus as pvinve
 
 
 # our own packages
+import configparser
 from vedbus import VeDbusService
 import paho.mqtt.client as mqtt
 import os
@@ -47,14 +48,63 @@ handler.setLevel(logging.DEBUG)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-# MQTT Setup
-broker_address = "192.168.178.46"
-MQTTNAME = "MQTT_to_Inverter"
+def getConfig():
+    config = configparser.ConfigParser()
+    config.read("%s/config.ini" % (os.path.dirname(os.path.realpath(__file__))))
+    return config
 
+config = getConfig()
+
+def getMQTTName():
+    return config.get('MQTTBroker','name', fallback = 'MQTT_to_Inverter')
+
+def getMQTTAddress():
+    address = config.get('MQTTBroker','address', fallback = None)
+    if address == None:
+        logger.error("No MQTT Broker set in config.ini")
+        return address
+    else:
+        return address
+
+def getMQTTPort():
+    port = config.get('MQTTBroker','port', fallback = None)
+    if port != None:
+        return int(port)
+    else:
+        return 1883
+
+def connectBroker():
+    broker_address = getMQTTAddress()
+    broker_port = getMQTTPort()
+
+    try:
+        logger.info('connecting to MQTTBroker ' + broker_address + ' on Port ' + str(broker_port))
+
+        if broker_address != None:
+            client.connect(broker_address, port=broker_port)  # connect to broker
+            client.loop_start()
+        else:
+            logger.error("couldn't connect to MQTT Broker")
+    except Exception as e:
+        logger.exception("Error in Connect to Broker")
+        logger.exception(e)
+
+def getPosition():
+    return int(config.get('Setup','Inverter_Position', fallback = 0))
+
+def getTopicL1():
+    return config.get('Topics','L1', fallback ='')
+
+def getTopicL2():
+    return config.get('Topics','L2', fallback ='')
+
+def getTopicL3():
+    return config.get('Topics','L3', fallback ='')
+    
 devices = {
-    'L1': {'mqttpath': '',  'power': 0, 'voltage': 0, 'current': 0, 'total': 0, 'path': ''},
-    'L2': {'mqttpath': 'tele/stadtweg/ga/pvgarten/SENSOR', 'power': 0, 'voltage': 0, 'current': 0, 'total': 0, 'path': ''},
-    'L3': {'mqttpath': 'tele/stadtweg/eg/growatt/SENSOR',  'power': 0, 'voltage': 0, 'current': 0, 'total': 0, 'path': ''},
+    'L1': {'topic': getTopicL1(), 'power': 0, 'voltage': 0, 'current': 0, 'total': 0, 'path': ''},
+    'L2': {'topic': getTopicL2(), 'power': 0, 'voltage': 0, 'current': 0, 'total': 0, 'path': ''},
+    'L3': {'topic': getTopicL3(), 'power': 0, 'voltage': 0, 'current': 0, 'total': 0, 'path': ''},
 }
 
 # MQTT Abfragen:
@@ -68,7 +118,7 @@ def on_disconnect(client, userdata, rc):
 
     try:
         logger.info("Trying to Reconnect")
-        client.connect(broker_address)
+        connectBroker()
     except Exception as e:
         logger.exception("Error in Retrying to Connect with Broker")
         logger.exception(e)
@@ -76,35 +126,35 @@ def on_disconnect(client, userdata, rc):
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         logger.info("Connected to MQTT Broker!")
-        if devices['L1']['mqttpath'] != '':
-            client.subscribe(devices['L1']['mqttpath'])
-        if devices['L2']['mqttpath'] != '':
-            client.subscribe(devices['L2']['mqttpath'])
-        if devices['L3']['mqttpath'] != '':
-            client.subscribe(devices['L3']['mqttpath'])
+        if devices['L1']['topic'] != '':
+            client.subscribe(devices['L1']['topic'])
+        if devices['L2']['topic'] != '':
+            client.subscribe(devices['L2']['topic'])
+        if devices['L3']['topic'] != '':
+            client.subscribe(devices['L3']['topic'])
     else:
         logger.info("Failed to connect, return code %d\n", rc)
 
 def on_message(client, userdata, msg):
     try:
 
-        # logger.debug(msg.topic)
+        logger.debug(msg.topic)
 
-        if msg.topic == devices['L1']['mqttpath']:
+        if msg.topic == devices['L1']['topic']:
             jsonpayload = json.loads(msg.payload)
             devices['L1']['power'] = float(jsonpayload["ENERGY"]["Power"])
             devices['L1']['current'] = float(jsonpayload["ENERGY"]["Current"])
             devices['L1']['voltage'] = float(jsonpayload["ENERGY"]["Voltage"])
             devices['L1']['total'] = float(jsonpayload["ENERGY"]["Total"])
 
-        if msg.topic == devices['L2']['mqttpath']:
+        if msg.topic == devices['L2']['topic']:
             jsonpayload = json.loads(msg.payload)
             devices['L2']['power'] = float(jsonpayload["ENERGY"]["Power"])
             devices['L2']['current'] = float(jsonpayload["ENERGY"]["Current"])
             devices['L2']['voltage'] = float(jsonpayload["ENERGY"]["Voltage"])
             devices['L2']['total'] = float(jsonpayload["ENERGY"]["Total"])
 
-        if msg.topic == devices['L3']['mqttpath']:
+        if msg.topic == devices['L3']['topic']:
             jsonpayload = json.loads(msg.payload)
             devices['L3']['power'] = float(jsonpayload["ENERGY"]["Power"])
             devices['L3']['current'] = float(jsonpayload["ENERGY"]["Current"])
@@ -116,6 +166,11 @@ def on_message(client, userdata, msg):
             "Programm Tasmota Inverter ist abgestuerzt. (on message Funkion)")
         logger.exception(e)
 
+# Konfiguration MQTT
+client = mqtt.Client(getMQTTName())  # create new instance
+client.on_disconnect = on_disconnect
+client.on_connect = on_connect
+client.on_message = on_message
 class DbusDummyService:
     def __init__(self, servicename, deviceinstance, paths, productname='Tasmota Inverter', connection='MQTT'):
         self._dbusservice = VeDbusService(servicename)
@@ -139,7 +194,7 @@ class DbusDummyService:
         self._dbusservice.add_path('/HardwareVersion', 0)
         self._dbusservice.add_path('/Connected', 1)
         self._dbusservice.add_path('/StatusCode', 0)
-        self._dbusservice.add_path('/Position', 0)
+        self._dbusservice.add_path('/Position', getPosition())
         self._dbusservice.add_path('/Latency', None)
 
         for path, settings in self._paths.items():
@@ -180,6 +235,9 @@ class DbusDummyService:
 
 
 def main():
+
+    connectBroker()
+
     thread.daemon = True  # allow the program to quit
 
     from dbus.mainloop.glib import DBusGMainLoop
@@ -210,15 +268,6 @@ def main():
     mainloop = gobject.MainLoop()
     mainloop.run()
 
-
-# Konfiguration MQTT
-client = mqtt.Client(MQTTNAME)  # create new instance
-client.on_disconnect = on_disconnect
-client.on_connect = on_connect
-client.on_message = on_message
-client.connect(broker_address)  # connect to broker
-
-client.loop_start()
 
 if __name__ == "__main__":
     main()
