@@ -45,6 +45,8 @@ See config.ini and amend for your own needs. The Inverter_Position parameter def
 
 ### Debugging
 
+The log you find in /var/log/dbus-tasmota-inverter
+
 You can check the status of the service with svstat:
 
 `svstat /service/dbus-tasmota-inverter`
