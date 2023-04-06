@@ -161,8 +161,7 @@ def on_message(client, userdata, msg):
             logger.info("Topic not in configurd topics. This shouldn't be happen")
 
     except Exception as e:
-        logger.exception(
-            "Programm Tasmota Inverter ist abgestuerzt. (on message Funkion)")
+        logger.exception("Error in handling of received message payload: " + msg.payload)
         logger.exception(e)
 
 # Konfiguration MQTT
