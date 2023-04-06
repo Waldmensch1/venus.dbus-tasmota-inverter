@@ -10,7 +10,9 @@ See config.ini and amend for your own needs. The Inverter_Position parameter def
 In [Topics] section you can specify a unlimited number of topics per phase. If multiple topics are assigned to one phase the current and power values will be added to a total for this phase
 
 Example:
+
     `L1 = topic1[,topic2,topic3]`
+    
     `L3 = topic4`
 
 ### Installation
@@ -52,6 +54,8 @@ Example:
 ### Debugging
 
 The log you find in /var/log/dbus-tasmota-inverter
+
+`tail -f -n 200 /data/log/dbus-tasmota-inverter/current.log`
 
 You can check the status of the service with svstat:
 
