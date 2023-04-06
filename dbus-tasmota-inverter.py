@@ -47,6 +47,7 @@ handler = RotatingFileHandler('/var/log/dbus-tasmota-inverter/current.log', maxB
 handler.setLevel(logging.DEBUG)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+logger.info("Service Startup")
 
 def getConfig():
     config = configparser.ConfigParser()
@@ -92,21 +93,31 @@ def connectBroker():
 def getPosition():
     return int(config.get('Setup','Inverter_Position', fallback = 0))
 
-def getTopicL1():
-    return config.get('Topics','L1', fallback ='')
+tasmota_devices = {}
 
-def getTopicL2():
-    return config.get('Topics','L2', fallback ='')
+def getTopics():
 
-def getTopicL3():
-    return config.get('Topics','L3', fallback ='')
+    strtopics = config.get('Topics','L1', fallback ='')
+    if strtopics != '':
+        topics = strtopics.split(',')
+        for topic in topics:
+            tasmota_devices[topic.strip()] = {'phase' : 'L1', 'power': 0, 'voltage': 0, 'current': 0, 'total': 0}
+            logger.info("Topic added to L1: " + topic.strip())
+
+    strtopics = config.get('Topics','L2', fallback ='')
+    if strtopics != '':
+        topics = strtopics.split(',')
+        for topic in topics:
+            tasmota_devices[topic.strip()] = {'phase' : 'L2', 'power': 0, 'voltage': 0, 'current': 0, 'total': 0}
+            logger.info("Topic added to L2: " + topic.strip())
+
+    strtopics = config.get('Topics','L3', fallback ='')
+    if strtopics != '':
+        topics = strtopics.split(',')
+        for topic in topics:
+            tasmota_devices[topic.strip()] = {'phase' : 'L3', 'power': 0, 'voltage': 0, 'current': 0, 'total': 0}
+            logger.info("Topic added to L3: " + topic.strip())
     
-devices = {
-    'L1': {'topic': getTopicL1(), 'power': 0, 'voltage': 0, 'current': 0, 'total': 0, 'path': ''},
-    'L2': {'topic': getTopicL2(), 'power': 0, 'voltage': 0, 'current': 0, 'total': 0, 'path': ''},
-    'L3': {'topic': getTopicL3(), 'power': 0, 'voltage': 0, 'current': 0, 'total': 0, 'path': ''},
-}
-
 # MQTT Abfragen:
 def on_disconnect(client, userdata, rc):
     logger.info("Client Got Disconnected")
@@ -126,40 +137,28 @@ def on_disconnect(client, userdata, rc):
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         logger.info("Connected to MQTT Broker!")
-        if devices['L1']['topic'] != '':
-            client.subscribe(devices['L1']['topic'])
-        if devices['L2']['topic'] != '':
-            client.subscribe(devices['L2']['topic'])
-        if devices['L3']['topic'] != '':
-            client.subscribe(devices['L3']['topic'])
+        if len(tasmota_devices) > 0:
+            for topic in tasmota_devices.keys():
+                client.subscribe(topic)
+                logger.info("Subscribed to: " + topic)
+        else:
+            logger.info("No Topic to subscribe, please configure in config.ini")
     else:
         logger.info("Failed to connect, return code %d\n", rc)
 
 def on_message(client, userdata, msg):
     try:
 
-        logger.debug(msg.topic)
+        logger.debug('Incoming message from: ' + msg.topic)
 
-        if msg.topic == devices['L1']['topic']:
+        if msg.topic in tasmota_devices:
             jsonpayload = json.loads(msg.payload)
-            devices['L1']['power'] = float(jsonpayload["ENERGY"]["Power"])
-            devices['L1']['current'] = float(jsonpayload["ENERGY"]["Current"])
-            devices['L1']['voltage'] = float(jsonpayload["ENERGY"]["Voltage"])
-            devices['L1']['total'] = float(jsonpayload["ENERGY"]["Total"])
-
-        if msg.topic == devices['L2']['topic']:
-            jsonpayload = json.loads(msg.payload)
-            devices['L2']['power'] = float(jsonpayload["ENERGY"]["Power"])
-            devices['L2']['current'] = float(jsonpayload["ENERGY"]["Current"])
-            devices['L2']['voltage'] = float(jsonpayload["ENERGY"]["Voltage"])
-            devices['L2']['total'] = float(jsonpayload["ENERGY"]["Total"])
-
-        if msg.topic == devices['L3']['topic']:
-            jsonpayload = json.loads(msg.payload)
-            devices['L3']['power'] = float(jsonpayload["ENERGY"]["Power"])
-            devices['L3']['current'] = float(jsonpayload["ENERGY"]["Current"])
-            devices['L3']['voltage'] = float(jsonpayload["ENERGY"]["Voltage"])
-            devices['L3']['total'] = float(jsonpayload["ENERGY"]["Total"])
+            tasmota_devices[msg.topic]['power'] = float(jsonpayload["ENERGY"]["Power"])
+            tasmota_devices[msg.topic]['current'] = float(jsonpayload["ENERGY"]["Current"])
+            tasmota_devices[msg.topic]['voltage'] = float(jsonpayload["ENERGY"]["Voltage"])
+            tasmota_devices[msg.topic]['total'] = float(jsonpayload["ENERGY"]["Total"])
+        else:
+            logger.info("Topic not in configurd topics. This shouldn't be happen")
 
     except Exception as e:
         logger.exception(
@@ -167,10 +166,12 @@ def on_message(client, userdata, msg):
         logger.exception(e)
 
 # Konfiguration MQTT
+getTopics()
 client = mqtt.Client(getMQTTName())  # create new instance
 client.on_disconnect = on_disconnect
 client.on_connect = on_connect
 client.on_message = on_message
+
 class DbusDummyService:
     def __init__(self, servicename, deviceinstance, paths, productname='Tasmota Inverter', connection='MQTT'):
         self._dbusservice = VeDbusService(servicename)
@@ -211,17 +212,28 @@ class DbusDummyService:
         logger.info("Service is running")
 
     def _update(self):
-        self._dbusservice['/Ac/Power'] = devices['L1']['power'] + \
-            devices['L2']['power'] + devices['L3']['power']
-        self._dbusservice['/Ac/L1/Voltage'] = devices['L1']['voltage']
-        self._dbusservice['/Ac/L2/Voltage'] = devices['L2']['voltage']
-        self._dbusservice['/Ac/L3/Voltage'] = devices['L3']['voltage']
-        self._dbusservice['/Ac/L1/Current'] = devices['L1']['current']
-        self._dbusservice['/Ac/L2/Current'] = devices['L2']['current']
-        self._dbusservice['/Ac/L3/Current'] = devices['L3']['current']
-        self._dbusservice['/Ac/L1/Power'] = devices['L1']['power']
-        self._dbusservice['/Ac/L2/Power'] = devices['L2']['power']
-        self._dbusservice['/Ac/L3/Power'] = devices['L3']['power']
+
+        vals = {'L1':{'v':0,'c':0,'p':0},
+                'L2':{'v':0,'c':0,'p':0},
+                'L3':{'v':0,'c':0,'p':0},
+                'total':{'v':0,'c':0,'p':0}}
+
+        for tasmota_device in tasmota_devices.values():
+            vals[tasmota_device['phase']]['v'] = tasmota_device['voltage']
+            vals[tasmota_device['phase']]['c'] += tasmota_device['current']
+            vals[tasmota_device['phase']]['p'] += tasmota_device['power']
+            vals['total']['p'] += tasmota_device['power']
+
+        self._dbusservice['/Ac/Power'] = vals['total']['p']
+        self._dbusservice['/Ac/L1/Voltage'] = vals['L1']['v']
+        self._dbusservice['/Ac/L2/Voltage'] = vals['L2']['v']
+        self._dbusservice['/Ac/L3/Voltage'] = vals['L3']['v']
+        self._dbusservice['/Ac/L1/Current'] = vals['L1']['c']
+        self._dbusservice['/Ac/L2/Current'] = vals['L2']['c']
+        self._dbusservice['/Ac/L3/Current'] = vals['L3']['c']
+        self._dbusservice['/Ac/L1/Power'] = vals['L1']['p']
+        self._dbusservice['/Ac/L2/Power'] = vals['L2']['p']
+        self._dbusservice['/Ac/L3/Power'] = vals['L3']['p']
 
         index = self._dbusservice['/UpdateIndex'] + 1  # increment index
         if index > 255:   # maximum value of the index
