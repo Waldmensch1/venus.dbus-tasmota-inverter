@@ -93,30 +93,27 @@ def connectBroker():
 def getPosition():
     return int(config.get('Setup','Inverter_Position', fallback = 0))
 
+# prepare dict
 tasmota_devices = {}
 
+# get topics for a single phase
+def getTopic(phase):
+    strtopics = config.get('Topics', phase, fallback ='')
+    if strtopics != '':
+        topics = strtopics.split(',')
+        for topic in topics:
+            t = topic.strip()
+            if t not in tasmota_devices:
+                tasmota_devices[t] = {'phase' : phase, 'power': 0, 'voltage': 0, 'current': 0, 'total': 0}
+                logger.info("Topic added to " + phase + ": " + t)
+            else:
+                logger.info("Cannot add topic " + t + " as it is already added to " + tasmota_devices[t]['phase'])
+
+# get topics for all phases
 def getTopics():
-
-    strtopics = config.get('Topics','L1', fallback ='')
-    if strtopics != '':
-        topics = strtopics.split(',')
-        for topic in topics:
-            tasmota_devices[topic.strip()] = {'phase' : 'L1', 'power': 0, 'voltage': 0, 'current': 0, 'total': 0}
-            logger.info("Topic added to L1: " + topic.strip())
-
-    strtopics = config.get('Topics','L2', fallback ='')
-    if strtopics != '':
-        topics = strtopics.split(',')
-        for topic in topics:
-            tasmota_devices[topic.strip()] = {'phase' : 'L2', 'power': 0, 'voltage': 0, 'current': 0, 'total': 0}
-            logger.info("Topic added to L2: " + topic.strip())
-
-    strtopics = config.get('Topics','L3', fallback ='')
-    if strtopics != '':
-        topics = strtopics.split(',')
-        for topic in topics:
-            tasmota_devices[topic.strip()] = {'phase' : 'L3', 'power': 0, 'voltage': 0, 'current': 0, 'total': 0}
-            logger.info("Topic added to L3: " + topic.strip())
+    getTopic('L1')
+    getTopic('L2')
+    getTopic('L3')
     
 # MQTT Abfragen:
 def on_disconnect(client, userdata, rc):
@@ -137,6 +134,8 @@ def on_disconnect(client, userdata, rc):
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         logger.info("Connected to MQTT Broker!")
+
+        # subscribe to all topics we have in dict
         if len(tasmota_devices) > 0:
             for topic in tasmota_devices.keys():
                 client.subscribe(topic)
@@ -151,6 +150,7 @@ def on_message(client, userdata, msg):
 
         logger.debug('Incoming message from: ' + msg.topic)
 
+        # write the values into dict
         if msg.topic in tasmota_devices:
             jsonpayload = json.loads(msg.payload)
             tasmota_devices[msg.topic]['power'] = float(jsonpayload["ENERGY"]["Power"])
@@ -219,9 +219,12 @@ class DbusDummyService:
                 'total':{'v':0,'c':0,'p':0}}
 
         for tasmota_device in tasmota_devices.values():
+            # the voltage is a bit a problem here, as it can differ from tasmota device to device
+            # so we take the first best voltaga
             vals[tasmota_device['phase']]['v'] = tasmota_device['voltage']
             vals[tasmota_device['phase']]['c'] += tasmota_device['current']
             vals[tasmota_device['phase']]['p'] += tasmota_device['power']
+            # this is the sum power per phase
             vals['total']['p'] += tasmota_device['power']
 
         self._dbusservice['/Ac/Power'] = vals['total']['p']
