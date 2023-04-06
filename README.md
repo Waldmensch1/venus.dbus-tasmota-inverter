@@ -11,6 +11,7 @@ In [Topics] section you can specify a unlimited number of topics per phase. If m
 
 Example:
     `L1 = topic1[,topic2,topic3]`
+    
     `L3 = topic4`
 
 ### Installation
