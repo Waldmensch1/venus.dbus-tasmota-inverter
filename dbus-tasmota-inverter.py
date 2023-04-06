@@ -220,9 +220,8 @@ class DbusDummyService:
         for tasmota_device in tasmota_devices.values():
             # the voltage is a bit a problem here, as it can differ from tasmota device to device
             # so we take the first best voltage
-            if tasmota_device['voltage'] == 0:
-                tasmota_device['voltage'] = 230
-            vals[tasmota_device['phase']]['v'] = tasmota_device['voltage']
+            if tasmota_device['voltage'] != 0:
+                vals[tasmota_device['phase']]['v'] = tasmota_device['voltage']
             vals[tasmota_device['phase']]['c'] += tasmota_device['current']
             vals[tasmota_device['phase']]['p'] += tasmota_device['power']
             # this is the sum power per phase
