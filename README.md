@@ -55,6 +55,8 @@ Example:
 
 The log you find in /var/log/dbus-tasmota-inverter
 
+`tail -f -n 200 /data/log/dbus-tasmota-inverter/current.log`
+
 You can check the status of the service with svstat:
 
 `svstat /service/dbus-tasmota-inverter`
