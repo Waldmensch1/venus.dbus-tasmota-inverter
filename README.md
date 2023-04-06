@@ -10,6 +10,7 @@ See config.ini and amend for your own needs. The Inverter_Position parameter def
 In [Topics] section you can specify a unlimited number of topics per phase. If multiple topics are assigned to one phase the current and power values will be added to a total for this phase
 
 Example:
+
     `L1 = topic1[,topic2,topic3]`
     
     `L3 = topic4`
